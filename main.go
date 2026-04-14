@@ -27,11 +27,14 @@ type styles struct {
 }
 
 type model struct {
-	main     bool
-	settings bool
-	choice   string
-	styles   styles
-	quitting bool
+	main         bool
+	list         list.Model
+	mainMenu     list.Model
+	settings     bool
+	settingsView list.Model
+	choice       string
+	styles       styles
+	quitting     bool
 }
 
 type Commodity struct {
@@ -91,7 +94,7 @@ func newStyles(darkBG bool) styles {
 
 func initialModel() model {
 	items := []list.Item{
-		item("Settings"),
+		item("Change Settings"),
 		item("Exit"),
 	}
 	const defaultWidth = 20
@@ -101,7 +104,7 @@ func initialModel() model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 
-	m := model{list: l}
+	m := model{mainMenu: l}
 	m.updateStyles(true)
 	return m
 }
@@ -146,35 +149,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 }
 
-func settingsView(m model) string {
-	c := m.choice
+func settingsView(m model) model {
+	items := []list.Item{
+		item("Change UEX API Key"),
+		item("Set Total SCU Cargo Size"),
+	}
+	const defaultWidth = 20
 
-	tpl := "What would you like to change?"
-	tpl += "%s\n\n"
-
-	choices := fmt.Sprintf(
-		"%s\n%s\n",
-		checkbox("Set UEX API Key", c == 0),
-		checkbox("Set SCU Cargo size", c == 1),
-	)
-
-	return fmt.Sprintf(tpl, choices)
+	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
+	l.Title = "What would you like to change?"
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	s := model{list: l}
+	s.updateStyles(true)
+	return s
 
 }
 
 // Main View
 func (m model) View() tea.View {
-	var s string
 	if m.quitting {
 		return tea.NewView("\n  See you later!\n\n")
 	}
-	if !m.main {
-		s = settingsView(m)
-		return tea.NewView(s)
+	if m.settings {
+		return tea.NewView(m.settingsView.View())
 	} else {
-		s = TradeView(m)
+		return tea.NewView("\n  See you later!\n\n")
 	}
-	return tea.NewView(mainStyle.Render("\n" + s + "\n"))
+	return tea.NewView("\n  See you later!\n\n")
+	//return tea.NewView(mainStyle.Render("\n" + s + "\n"))
+	//return tea.NewView(m.settings.View())
 }
 
 func main() {
