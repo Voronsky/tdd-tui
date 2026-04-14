@@ -13,6 +13,10 @@ import (
 
 const listHeight = 14
 
+var (
+	keywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+)
+
 type styles struct {
 	title        lipgloss.Style
 	item         lipgloss.Style
@@ -23,7 +27,8 @@ type styles struct {
 }
 
 type model struct {
-	list     list.Model
+	main     bool
+	settings bool
 	choice   string
 	styles   styles
 	quitting bool
@@ -142,24 +147,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func settingsView(m model) string {
-	var msg string
+	c := m.choice
 
-	switch m.choice {
-	case "Settings":
-		msg = fmt.Sprint("Which settings would you like to review/change?")
-	default:
-		msg = fmt.Sprintf("Peace! Placeholder text")
-	}
+	tpl := "What would you like to change?"
+	tpl += "%s\n\n"
+
+	choices := fmt.Sprintf(
+		"%s\n%s\n",
+		checkbox("Set UEX API Key", c == 0),
+		checkbox("Set SCU Cargo size", c == 1),
+	)
+
+	return fmt.Sprintf(tpl, choices)
+
 }
 
+// Main View
 func (m model) View() tea.View {
-	if m.choice != "" {
-		return tea.NewView(m.styles.quitText.Render(fmt.Sprintf("%s? Sounds good to me.", m.choice)))
-	}
+	var s string
 	if m.quitting {
-		return tea.NewView(m.styles.quitText.Render("Not hungry? That’s cool."))
+		return tea.NewView("\n  See you later!\n\n")
 	}
-	return tea.NewView("\n" + m.list.View())
+	if !m.main {
+		s = settingsView(m)
+		return tea.NewView(s)
+	} else {
+		s = TradeView(m)
+	}
+	return tea.NewView(mainStyle.Render("\n" + s + "\n"))
 }
 
 func main() {
