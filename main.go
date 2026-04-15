@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -11,7 +12,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-const listHeight = 14
+type SessionState int
+
+const (
+	listHeight              = 14
+	ViewState  SessionState = iota
+	MainState
+	SettingsState
+)
 
 var (
 	keywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
@@ -27,14 +35,11 @@ type styles struct {
 }
 
 type model struct {
-	main         bool
-	list         list.Model
-	mainMenu     list.Model
-	settings     bool
-	settingsView list.Model
-	choice       string
-	styles       styles
-	quitting     bool
+	state    SessionState
+	list     list.Model
+	choice   string
+	styles   styles
+	quitting bool
 }
 
 type Commodity struct {
@@ -94,6 +99,7 @@ func newStyles(darkBG bool) styles {
 
 func initialModel() model {
 	items := []list.Item{
+		item("Trade"),
 		item("Change Settings"),
 		item("Exit"),
 	}
@@ -104,7 +110,7 @@ func initialModel() model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 
-	m := model{mainMenu: l}
+	m := model{state: MainState, list: l}
 	m.updateStyles(true)
 	return m
 }
@@ -132,14 +138,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keypress := msg.String(); keypress {
 		case "q", "ctrl+c":
 			m.quitting = true
+			log.Println("User chose to quit")
 			return m, tea.Quit
 
 		case "enter":
 			i, ok := m.list.SelectedItem().(item)
-			if ok {
-				m.choice = string(i)
+			m.choice = string(i)
+			log.Println("User made choice = %s", m.choice)
+			if ok && m.state == MainState {
+				switch m.choice {
+				case "Change Settings":
+					m.state = SettingsState
+					m = settingsList(m)
+					return m, nil
+				default:
+					m.quitting = true
+					return m, tea.Quit
+
+				}
 			}
-			return m, tea.Quit
+			if ok && m.state == SettingsState {
+				switch m.choice {
+				case "Back to Main Menu":
+					m.state = MainState
+					m = mainList((m))
+					return m, nil
+				default:
+					m.quitting = true
+					return m, tea.Quit
+				}
+			}
+			return m, nil
 		}
 	}
 
@@ -149,39 +178,74 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 }
 
-func settingsView(m model) model {
+func settingsList(m model) model {
+	log.Println("Entered the SettingsList() func")
 	items := []list.Item{
 		item("Change UEX API Key"),
 		item("Set Total SCU Cargo Size"),
+		item("Back to Main Menu"),
 	}
-	const defaultWidth = 20
+	const defaultWidth = 45
 
 	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
 	l.Title = "What would you like to change?"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
-	s := model{list: l}
-	s.updateStyles(true)
-	return s
+	m = model{state: SettingsState, list: l, choice: "Change Settings"}
+	m.updateStyles(true)
+	log.Println("Exiting the SettingsList() func")
+	return m
+
+}
+
+func mainList(m model) model {
+	log.Println("Entered the MainList() func")
+	items := []list.Item{
+		item("Trade"),
+		item("Change Settings"),
+		item("Exit"),
+	}
+	const defaultWidth = 20
+
+	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
+	l.Title = "List of options"
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+
+	m = model{state: MainState, list: l, choice: "Back to Main Menu"}
+	m.updateStyles(true)
+	log.Println("Exiting the MainList() func")
+	return m
 
 }
 
 // Main View
 func (m model) View() tea.View {
+	log.Println("Entered the View() func")
 	if m.quitting {
 		return tea.NewView("\n  See you later!\n\n")
 	}
-	if m.settings {
-		return tea.NewView(m.settingsView.View())
-	} else {
-		return tea.NewView("\n  See you later!\n\n")
+	if m.state == MainState {
+		return tea.NewView("\n" + m.list.View())
 	}
-	return tea.NewView("\n  See you later!\n\n")
+
+	log.Println("Exiting the View() func")
+	return tea.NewView(m.list.View())
 	//return tea.NewView(mainStyle.Render("\n" + s + "\n"))
 	//return tea.NewView(m.settings.View())
 }
 
 func main() {
+	if len(os.Getenv("DEBUG")) > 0 {
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+
+	}
+
 	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
