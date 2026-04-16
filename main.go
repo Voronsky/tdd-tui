@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -16,8 +17,14 @@ import (
 type SessionState int
 
 const (
-	listHeight              = 14
-	ViewState  SessionState = iota
+	ChangeAPIStr              = "Change API UEX key"
+	ChangeSCUStr              = "Change SCU cargo size"
+	ExitStr                   = "Exit"
+	GoBackStr                 = "Go Back"
+	TradeStr                  = "Trade"
+	SettingsStr               = "Change Settings"
+	listHeight                = 14
+	ViewState    SessionState = iota
 	MainState
 	SettingsState
 	SetApiState
@@ -27,8 +34,8 @@ const (
 
 var (
 	keywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
-	api          []string
-	cargoSize    int64
+	api          string
+	cargoSize    uint = 0
 )
 
 type styles struct {
@@ -106,9 +113,9 @@ func newStyles(darkBG bool) styles {
 
 func initialModel() model {
 	items := []list.Item{
-		item("Trade"),
-		item("Change Settings"),
-		item("Exit"),
+		item(TradeStr),
+		item(SettingsStr),
+		item(ExitStr),
 	}
 	const defaultWidth = 20
 
@@ -135,7 +142,114 @@ func (m *model) updateStyles(isDark bool) {
 	m.list.SetDelegate(itemDelegate{styles: &m.styles})
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Key Press management for API View
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch keypress := msg.String(); keypress {
+		case "enter":
+			i, ok := m.list.SelectedItem().(item)
+			m.choice = string(i)
+			log.Println("User made choice: ", m.choice)
+			if ok && m.choice == ChangeAPIStr {
+				m.state = SetApiState
+				m = setApiView(m)
+				return m, nil
+			}
+			if ok && m.choice == ChangeSCUStr {
+				m.state = SetCargoSizeState
+				m = setCargoSizeView(m)
+				return m, nil
+			}
+			return m, nil
+		case "esc", "q":
+			m.state = MainState
+			m = mainList(m)
+			return m, nil
+		case "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		}
+	}
+
+	return m, nil
+
+}
+
+func (m model) updateApi(msg tea.Msg) (tea.Model, tea.Cmd) {
+
+	// Key Press management for API View
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch keypress := msg.String(); keypress {
+		case "enter":
+			// Get the User's API key
+			api = m.textInput.Value()
+			log.Println("User set API value to:", api)
+
+			// Clear the text field for the next time it gets here
+			m.textInput.Reset()
+
+			// Now change the state to go back to the Settings State
+			m.state = SettingsState
+			m = settingsList(m)
+			// Go back to the Settings View
+			return m, nil
+		case "esc", "q":
+			m.state = SettingsState
+			m = settingsList(m)
+			return m, nil
+		case "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		}
+	}
+
+	return m, nil
+
+}
+
+func (m model) updateCargoSize(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Key Press management for API View
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch keypress := msg.String(); keypress {
+		case "enter":
+			// Get the User's API key
+			scu, err := strconv.Atoi(m.textInput.Value())
+			if err != nil {
+				log.Fatalln("Non integer value inserted, exiting now...")
+			}
+			cargoSize = uint(scu)
+			// No non-negative integers
+			if cargoSize < 0xFFFF {
+				log.Fatalln("Negative SCU inserted")
+			}
+			log.Println("User set CargoSize to:", api)
+
+			// Clear the text field for the next time it gets here
+			m.textInput.Reset()
+
+			// Now change the state to go back to the Settings State
+			m.state = SettingsState
+			m = settingsList(m)
+			// Go back to the Settings View
+			return m, nil
+		case "esc", "q":
+			m.state = SettingsState
+			m = settingsList(m)
+			return m, nil
+		case "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		}
+	}
+
+	return m, nil
+
+}
+
+func (m model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
@@ -151,36 +265,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			i, ok := m.list.SelectedItem().(item)
 			m.choice = string(i)
-			log.Println("User made choice = %s", m.choice)
-			if ok && m.state == MainState {
-				switch m.choice {
-				case "Change Settings":
-					m.state = SettingsState
-					m = settingsList(m)
-					return m, nil
-				default:
-					m.quitting = true
-					return m, tea.Quit
+			log.Println("User made choice: ", m.choice)
+			if ok && m.choice == SettingsStr {
+				m.state = SettingsState
+				m = settingsList(m)
+				return m, nil
 
-				}
 			}
-			if ok && m.state == SettingsState {
-				switch m.choice {
-				case "Change UEX API Key":
-					m.state = SetApiState
-					m = setApiView(m)
-					return m, nil
-				case "Back to Main Menu":
-					m.state = MainState
-					m = mainList((m))
-					return m, nil
-				default:
-					m.quitting = true
-					return m, tea.Quit
-				}
-			}
-			return m, nil
 		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -189,12 +282,44 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 }
 
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.list.SetWidth(msg.Width)
+		return m, nil
+	case tea.KeyPressMsg:
+		switch keypress := msg.String(); keypress {
+		case "ctrl+c", "q", "esc":
+			m.quitting = true
+			return m, tea.Quit
+		}
+
+	}
+
+	// Route messages to the right component based on it's state
+	switch m.state {
+
+	case SetApiState:
+		return m.updateApi(msg)
+	case SettingsState:
+		return m.updateSettings(msg)
+	case SetCargoSizeState:
+		return m.updateCargoSize(msg)
+	case MainState:
+		return m.updateMainMenu(msg)
+	default:
+		return m, nil
+
+	}
+
+}
+
 func settingsList(m model) model {
 	log.Println("Entered the SettingsList() func")
 	items := []list.Item{
-		item("Change UEX API Key"),
-		item("Set Total SCU Cargo Size"),
-		item("Back to Main Menu"),
+		item(ChangeAPIStr),
+		item(ChangeSCUStr),
+		item(GoBackStr),
 	}
 	const defaultWidth = 45
 
@@ -202,7 +327,10 @@ func settingsList(m model) model {
 	l.Title = "What would you like to change?"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
-	m = model{state: SettingsState, list: l, choice: "Change Settings"}
+	//m = model{state: SettingsState, list: l, choice: "Change Settings"}
+	m.state = SettingsState
+	m.list = l
+	m.choice = SettingsStr
 	m.updateStyles(true)
 	log.Println("Exiting the SettingsList() func")
 	return m
@@ -219,13 +347,24 @@ func setApiView(m model) model {
 	ti.CharLimit = 256
 	ti.SetWidth(20)
 	log.Println("Exited the apiView() func")
-	m = model{state: SetApiState, textInput: ti}
+	m.state = SetApiState
+	m.textInput = ti
+	m.updateStyles(true)
 	return m
 }
 
 // Set Cargo Size
 func setCargoSizeView(m model) model {
 	log.Println("Entered the setCargoSizeView() func")
+	ti := textinput.New()
+	ti.Placeholder = "Enter total cargo size"
+	ti.SetVirtualCursor(false)
+	ti.Focus()
+	ti.CharLimit = 256
+	ti.SetWidth(20)
+	m.state = SetCargoSizeState
+	m.textInput = ti
+	m.updateStyles(true)
 	log.Println("Exited the setCargoSizeView() func")
 	return m
 }
@@ -233,9 +372,9 @@ func setCargoSizeView(m model) model {
 func mainList(m model) model {
 	log.Println("Entered the MainList() func")
 	items := []list.Item{
-		item("Trade"),
-		item("Change Settings"),
-		item("Exit"),
+		item(TradeStr),
+		item(SettingsStr),
+		item(ExitStr),
 	}
 	const defaultWidth = 20
 
@@ -253,7 +392,6 @@ func mainList(m model) model {
 
 // Main View
 func (m model) View() tea.View {
-	log.Println("Entered the View() func")
 	if m.quitting {
 		return tea.NewView("\n  See you later!\n\n")
 	}
@@ -272,15 +410,29 @@ func (m model) View() tea.View {
 		v.Cursor = c
 		return v
 	}
+	if m.state == SetCargoSizeState {
+		var c *tea.Cursor
+		if !m.textInput.VirtualCursor() {
+			c := m.textInput.Cursor()
+			c.Y += lipgloss.Height(m.headerView())
 
-	log.Println("Exiting the View() func")
+		}
+		str := lipgloss.JoinVertical(lipgloss.Top, m.cargoSizeHeader(), m.textInput.View(), m.footerView())
+		v := tea.NewView(str)
+		v.Cursor = c
+		return v
+	}
+
 	return tea.NewView("\n" + m.list.View())
 	//return tea.NewView(mainStyle.Render("\n" + s + "\n"))
 	//return tea.NewView(m.settings.View())
 }
 
-func (m model) headerView() string { return "Please set your UEX API Key\n" }
-func (m model) footerView() string { return "\n(esc to quit)" }
+func (m model) headerView() string { return "Please set it below\n" }
+func (m model) cargoSizeHeader() string {
+	return fmt.Sprintf("Current Total SCU set to: %d", cargoSize)
+}
+func (m model) footerView() string { return "\n(q to quit)" }
 
 func main() {
 	if len(os.Getenv("DEBUG")) > 0 {
