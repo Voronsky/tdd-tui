@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/common-nighthawk/go-figure"
 )
 
 type SessionState int
@@ -23,7 +24,7 @@ const (
 	GoBackStr                 = "Go Back"
 	TradeStr                  = "Trade"
 	SettingsStr               = "Change Settings"
-	listHeight                = 14
+	listHeight                = 10
 	ViewState    SessionState = iota
 	MainState
 	SettingsState
@@ -104,7 +105,7 @@ func newStyles(darkBG bool) styles {
 	var s styles
 	s.title = lipgloss.NewStyle().MarginLeft(2)
 	s.item = lipgloss.NewStyle().PaddingLeft(4)
-	s.selectedItem = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
+	s.selectedItem = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("86"))
 	s.pagination = list.DefaultStyles(darkBG).PaginationStyle.PaddingLeft(4)
 	s.help = list.DefaultStyles(darkBG).HelpStyle.PaddingLeft(4).PaddingBottom(1)
 	s.quitText = lipgloss.NewStyle().Margin(1, 0, 2, 4)
@@ -161,7 +162,11 @@ func (m model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = setCargoSizeView(m)
 				return m, nil
 			}
-			return m, nil
+			if ok && m.choice == GoBackStr {
+				m.state = MainState
+				m = mainList(m)
+				return m, nil
+			}
 		case "esc", "q":
 			m.state = MainState
 			m = mainList(m)
@@ -172,7 +177,9 @@ func (m model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
 
 }
 
@@ -184,6 +191,12 @@ func (m model) updateApi(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keypress := msg.String(); keypress {
 		case "enter":
 			// Get the User's API key
+			if m.textInput.Value() == "" {
+				m.state = SettingsState
+				m = settingsList(m)
+				return m, nil
+			}
+
 			api = m.textInput.Value()
 			log.Println("User set API value to:", api)
 
@@ -195,17 +208,21 @@ func (m model) updateApi(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = settingsList(m)
 			// Go back to the Settings View
 			return m, nil
-		case "esc", "q":
+		case "esc":
+			m.textInput.Reset()
 			m.state = SettingsState
 			m = settingsList(m)
 			return m, nil
 		case "ctrl+c":
+			m.textInput.Reset()
 			m.quitting = true
 			return m, tea.Quit
 		}
 	}
 
-	return m, nil
+	var cmd tea.Cmd
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
 
 }
 
@@ -215,17 +232,17 @@ func (m model) updateCargoSize(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch keypress := msg.String(); keypress {
 		case "enter":
-			// Get the User's API key
+			// Get the User's SCU
+			if m.textInput.Value() == "" {
+				m.state = SettingsState
+				m = settingsList(m)
+				return m, nil
+			}
 			scu, err := strconv.Atoi(m.textInput.Value())
-			if err != nil {
-				log.Fatalln("Non integer value inserted, exiting now...")
+			if err == nil && scu >= 0 {
+				cargoSize = uint(scu)
+				log.Println("User set CargoSize to:", api)
 			}
-			cargoSize = uint(scu)
-			// No non-negative integers
-			if cargoSize < 0xFFFF {
-				log.Fatalln("Negative SCU inserted")
-			}
-			log.Println("User set CargoSize to:", api)
 
 			// Clear the text field for the next time it gets here
 			m.textInput.Reset()
@@ -235,17 +252,22 @@ func (m model) updateCargoSize(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = settingsList(m)
 			// Go back to the Settings View
 			return m, nil
+
 		case "esc", "q":
+			m.textInput.Reset()
 			m.state = SettingsState
 			m = settingsList(m)
 			return m, nil
 		case "ctrl+c":
+			m.textInput.Reset()
 			m.quitting = true
 			return m, tea.Quit
 		}
 	}
 
-	return m, nil
+	var cmd tea.Cmd
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
 
 }
 
@@ -272,8 +294,11 @@ func (m model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			}
+			if ok && m.choice == ExitStr {
+				m.quitting = true
+				return m, tea.Quit
+			}
 		}
-		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -284,9 +309,9 @@ func (m model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.list.SetWidth(msg.Width)
-		return m, nil
+	//case tea.WindowSizeMsg:
+	//	m.list.SetWidth(msg.Width)
+	//	return m, nil
 	case tea.KeyPressMsg:
 		switch keypress := msg.String(); keypress {
 		case "ctrl+c", "q", "esc":
@@ -396,7 +421,8 @@ func (m model) View() tea.View {
 		return tea.NewView("\n  See you later!\n\n")
 	}
 	if m.state == MainState {
-		return tea.NewView("\n" + m.list.View())
+		myFig := figure.NewFigure("TDD Terminal", "", true).String()
+		return tea.NewView("\n\n\n" + myFig + "\n" + m.list.View())
 	}
 	if m.state == SetApiState {
 		var c *tea.Cursor
@@ -428,22 +454,19 @@ func (m model) View() tea.View {
 	//return tea.NewView(m.settings.View())
 }
 
-func (m model) headerView() string { return "Please set it below\n" }
+func (m model) headerView() string { return fmt.Sprintf("\nCurrent API key: %s\n", api) }
 func (m model) cargoSizeHeader() string {
-	return fmt.Sprintf("Current Total SCU set to: %d", cargoSize)
+	return fmt.Sprintf("\nCurrent Total SCU set to: %d", cargoSize)
 }
 func (m model) footerView() string { return "\n(q to quit)" }
 
 func main() {
-	if len(os.Getenv("DEBUG")) > 0 {
-		f, err := tea.LogToFile("debug.log", "debug")
-		if err != nil {
-			fmt.Println("fatal:", err)
-			os.Exit(1)
-		}
-		defer f.Close()
-
+	f, err := tea.LogToFile("debug.log", "debug")
+	if err != nil {
+		fmt.Println("fatal:", err)
+		os.Exit(1)
 	}
+	defer f.Close()
 
 	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
 		fmt.Println("Error running program:", err)
