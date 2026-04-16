@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -19,10 +20,15 @@ const (
 	ViewState  SessionState = iota
 	MainState
 	SettingsState
+	SetApiState
+	SetCargoSizeState
+	TradeState
 )
 
 var (
 	keywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+	api          []string
+	cargoSize    int64
 )
 
 type styles struct {
@@ -35,11 +41,12 @@ type styles struct {
 }
 
 type model struct {
-	state    SessionState
-	list     list.Model
-	choice   string
-	styles   styles
-	quitting bool
+	state     SessionState
+	list      list.Model
+	choice    string
+	styles    styles
+	quitting  bool
+	textInput textinput.Model
 }
 
 type Commodity struct {
@@ -117,7 +124,7 @@ func initialModel() model {
 
 func (m model) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
-	return nil
+	return textinput.Blink
 }
 
 func (m *model) updateStyles(isDark bool) {
@@ -159,6 +166,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if ok && m.state == SettingsState {
 				switch m.choice {
+				case "Change UEX API Key":
+					m.state = SetApiState
+					m = setApiView(m)
+					return m, nil
 				case "Back to Main Menu":
 					m.state = MainState
 					m = mainList((m))
@@ -198,6 +209,27 @@ func settingsList(m model) model {
 
 }
 
+// Get the API key from UEX
+func setApiView(m model) model {
+	log.Println("Entered the apiView() func")
+	ti := textinput.New()
+	ti.Placeholder = "Enter API Key here"
+	ti.SetVirtualCursor(false)
+	ti.Focus()
+	ti.CharLimit = 256
+	ti.SetWidth(20)
+	log.Println("Exited the apiView() func")
+	m = model{state: SetApiState, textInput: ti}
+	return m
+}
+
+// Set Cargo Size
+func setCargoSizeView(m model) model {
+	log.Println("Entered the setCargoSizeView() func")
+	log.Println("Exited the setCargoSizeView() func")
+	return m
+}
+
 func mainList(m model) model {
 	log.Println("Entered the MainList() func")
 	items := []list.Item{
@@ -228,12 +260,27 @@ func (m model) View() tea.View {
 	if m.state == MainState {
 		return tea.NewView("\n" + m.list.View())
 	}
+	if m.state == SetApiState {
+		var c *tea.Cursor
+		if !m.textInput.VirtualCursor() {
+			c := m.textInput.Cursor()
+			c.Y += lipgloss.Height(m.headerView())
+
+		}
+		str := lipgloss.JoinVertical(lipgloss.Top, m.headerView(), m.textInput.View(), m.footerView())
+		v := tea.NewView(str)
+		v.Cursor = c
+		return v
+	}
 
 	log.Println("Exiting the View() func")
-	return tea.NewView(m.list.View())
+	return tea.NewView("\n" + m.list.View())
 	//return tea.NewView(mainStyle.Render("\n" + s + "\n"))
 	//return tea.NewView(m.settings.View())
 }
+
+func (m model) headerView() string { return "Please set your UEX API Key\n" }
+func (m model) footerView() string { return "\n(esc to quit)" }
 
 func main() {
 	if len(os.Getenv("DEBUG")) > 0 {
