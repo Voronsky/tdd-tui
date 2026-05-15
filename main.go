@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/common-nighthawk/go-figure"
+	"github.com/tdd-tui/internal/uex"
 )
 
 type SessionState int
@@ -394,6 +395,18 @@ func setCargoSizeView(m model) model {
 	return m
 }
 
+func TradeView(m model) model {
+	log.Println("Commodities")
+	resp, err := uex.GetCommmoddityPrices()
+	m.state = TradeState
+	if err != nil {
+		log.Println("Can't connect to UEX")
+		return m
+	}
+	log.Println("Commodities: ", resp)
+	return m
+}
+
 func mainList(m model) model {
 	log.Println("Entered the MainList() func")
 	items := []list.Item{
@@ -437,6 +450,18 @@ func (m model) View() tea.View {
 		return v
 	}
 	if m.state == SetCargoSizeState {
+		var c *tea.Cursor
+		if !m.textInput.VirtualCursor() {
+			c := m.textInput.Cursor()
+			c.Y += lipgloss.Height(m.headerView())
+
+		}
+		str := lipgloss.JoinVertical(lipgloss.Top, m.cargoSizeHeader(), m.textInput.View(), m.footerView())
+		v := tea.NewView(str)
+		v.Cursor = c
+		return v
+	}
+	if m.state == TradeState {
 		var c *tea.Cursor
 		if !m.textInput.VirtualCursor() {
 			c := m.textInput.Cursor()
