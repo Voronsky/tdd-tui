@@ -2,10 +2,10 @@ package uex
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 )
 
 type Listing struct {
@@ -36,15 +36,55 @@ type APIResponse struct {
 	Data     []Listing `json:"data"`
 }
 
-func GetCommmoddityPrices() (APIResponse, error) {
+type APIClient struct {
+	BaseURL string
+	Token   string
+}
 
-	req, err := http.NewRequest("GET", "https://api.uexcorp.space/2.0/commodities", nil)
+func ClientConfig(url string, token string) APIClient {
+	return APIClient{BaseURL: url, Token: "Bearer " + token}
+
+}
+
+func (a *APIClient) CommmoddityPrices() (APIResponse, error) {
+
+	req, err := http.NewRequest("GET", a.BaseURL+"/commodities", nil)
 	if err != nil {
 		log.Panicln("Error unable to make a New Request")
 		return APIResponse{}, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("TOKEN"))
+	req.Header.Set("Authorization", a.Token)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	req.Header.Add("Accept", "application/json")
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalln("Get request failed lol")
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var uexResponse APIResponse
+	err = json.Unmarshal(body, &uexResponse)
+	if err != nil {
+		log.Fatalln("Unable to Marshal UEX response")
+	}
+
+	return uexResponse, nil
+
+}
+
+func (a *APIClient) CommmoddityRoutes(src int, dest int) (APIResponse, error) {
+
+	req, err := http.NewRequest("GET", fmt.Sprintf(a.BaseURL+"/commodities_route?id_terminal_origin=%d&id_terminal_destination=%d", src, dest), nil)
+	if err != nil {
+		log.Panicln("Error unable to make a New Request")
+		return APIResponse{}, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.Token)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 	req.Header.Add("Accept", "application/json")
 
