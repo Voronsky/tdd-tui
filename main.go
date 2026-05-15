@@ -38,6 +38,7 @@ var (
 	keywordStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
 	api          string
 	cargoSize    uint = 0
+	UEXClient    uex.APIClient
 )
 
 type styles struct {
@@ -200,6 +201,9 @@ func (m model) updateApi(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			api = m.textInput.Value()
 			log.Println("User set API value to:", api)
+
+			// Update the UEX client
+			UEXClient.Token = api
 
 			// Clear the text field for the next time it gets here
 			m.textInput.Reset()
@@ -492,7 +496,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer f.Close()
-
+	UEXClient = uex.ClientConfig("https://api.uexcorp.space/2.0", "")
 	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
