@@ -68,6 +68,7 @@ type APIResponse struct {
 type APIClient struct {
 	BaseURL string
 	Token   string
+	client  *http.Client
 }
 
 var (
@@ -90,8 +91,7 @@ func (a *APIClient) CommmodityPricesAll() (APIResponse, error) {
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Add("Accept", "application/json")
 
-	client := http.Client{}
-	resp, err := client.Do(req)
+	resp, err := a.client.Do(req)
 	if err != nil {
 		return APIResponse{}, fmt.Errorf("Client error = %w", err)
 	}
@@ -119,8 +119,7 @@ func (a *APIClient) CommmodityPrices(commodity_id int) (APIResponse, error) {
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Add("Accept", "application/json")
 
-	client := http.Client{}
-	resp, err := client.Do(req)
+	resp, err := a.client.Do(req)
 	if err != nil {
 		return APIResponse{}, fmt.Errorf("Client error = %w", err)
 	}
@@ -148,8 +147,7 @@ func (a *APIClient) CommmodityRoutes(src int, dest int) (APIResponse, error) {
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Add("Accept", "application/json")
 
-	client := http.Client{}
-	resp, err := client.Do(req)
+	resp, err := a.client.Do(req)
 	if err != nil {
 		return APIResponse{}, fmt.Errorf("Client error = %w", err)
 	}
