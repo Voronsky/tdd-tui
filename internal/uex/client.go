@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -30,6 +29,36 @@ type Listing struct {
 	TerminalName    string  `json:"terminal_name"`
 }
 
+type Commodity struct {
+	IDCommodity           int    `json:"id_commodity"`
+	IDStarSystem          int    `json:"id_star_system"`
+	IDPlanet              int    `json:"id_planet"`
+	IDOrbit               int    `json:"id_orbit"`
+	IDMoon                int    `json:"id_moon"`
+	IDCity                int    `json:"id_city"`
+	IDOutpost             int    `json:"id_outpost"`
+	IDPoi                 int    `json:"id_poi"`
+	IDFaction             int    `json:"id_faction"`
+	IDTerminal            int    `json:"id_terminal"`
+	GameVersion           string `json:"game_version"`
+	DateAdded             int    `json:"date_added"`
+	DateModified          int    `json:"date_modified"`
+	CommodityName         string `json:"commodity_name"`
+	CommodityCode         string `json:"commodity_code"`
+	CommoditySlug         string `json:"commodity_slug"`
+	StarSystemName        string `json:"star_system_name"`
+	PlanetName            string `json:"planet_name"`
+	OrbitName             string `json:"orbit_name"`
+	MoonName              string `json:"moon_name"`
+	SpaceStationName      string `json:"space_station_name"`
+	OutpostName           string `json:"outpost_name"`
+	CityName              string `json:"city_name"`
+	TerminalName          string `json:"terminal_name"`
+	TerminalCode          string `json:"terminal_code"`
+	TerminalSlug          string `json:"terminal_slug"`
+	TerminalIsPlayerOwned int    `json:"terminal_is_player_owned"`
+}
+
 type APIResponse struct {
 	Status   string    `json:"status"`
 	HttpCode int       `json:"http_code"`
@@ -41,27 +70,30 @@ type APIClient struct {
 	Token   string
 }
 
+var (
+	UserAgent string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
 func ClientConfig(url string, token string) APIClient {
 	return APIClient{BaseURL: url, Token: "Bearer " + token}
 
 }
 
-func (a *APIClient) CommmoddityPrices() (APIResponse, error) {
+func (a *APIClient) CommmodityPricesAll() (APIResponse, error) {
 
 	req, err := http.NewRequest("GET", a.BaseURL+"/commodities", nil)
 	if err != nil {
-		log.Panicln("Error unable to make a New Request")
-		return APIResponse{}, err
+		return APIResponse{}, fmt.Errorf("GET error = %w", err)
 	}
 
 	req.Header.Set("Authorization", a.Token)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Add("Accept", "application/json")
 
 	client := http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalln("Get request failed lol")
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -69,29 +101,28 @@ func (a *APIClient) CommmoddityPrices() (APIResponse, error) {
 	var uexResponse APIResponse
 	err = json.Unmarshal(body, &uexResponse)
 	if err != nil {
-		log.Fatalln("Unable to Marshal UEX response")
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
 	}
 
 	return uexResponse, nil
 
 }
 
-func (a *APIClient) CommmoddityRoutes(src int, dest int) (APIResponse, error) {
+func (a *APIClient) CommmodityPrices(commodity_id int) (APIResponse, error) {
 
-	req, err := http.NewRequest("GET", fmt.Sprintf(a.BaseURL+"/commodities_route?id_terminal_origin=%d&id_terminal_destination=%d", src, dest), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf(a.BaseURL+"/commodities?id_commodity=%d", commodity_id), nil)
 	if err != nil {
-		log.Panicln("Error unable to make a New Request")
-		return APIResponse{}, err
+		return APIResponse{}, fmt.Errorf("GET error = %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+a.Token)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	req.Header.Set("Authorization", a.Token)
+	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Add("Accept", "application/json")
 
 	client := http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalln("Get request failed lol")
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -99,7 +130,36 @@ func (a *APIClient) CommmoddityRoutes(src int, dest int) (APIResponse, error) {
 	var uexResponse APIResponse
 	err = json.Unmarshal(body, &uexResponse)
 	if err != nil {
-		log.Fatalln("Unable to Marshal UEX response")
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
+	}
+
+	return uexResponse, nil
+
+}
+
+func (a *APIClient) CommmodityRoutes(src int, dest int) (APIResponse, error) {
+
+	req, err := http.NewRequest("GET", fmt.Sprintf(a.BaseURL+"/commodities_route?id_terminal_origin=%d&id_terminal_destination=%d", src, dest), nil)
+	if err != nil {
+		return APIResponse{}, fmt.Errorf("GET error = %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.Token)
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Add("Accept", "application/json")
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var uexResponse APIResponse
+	err = json.Unmarshal(body, &uexResponse)
+	if err != nil {
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
 	}
 
 	return uexResponse, nil
