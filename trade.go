@@ -73,7 +73,7 @@ func RenderBloombergGrid(items []uex.Listing, focusedIndex int, terminalWidth in
 			"%s\n\nB: %.2f\nS: %.2f\n%s",
 			lipgloss.NewStyle().Bold(true).Render(item.CommodityName),
 			item.PriceBuy,
-			item.SCUSell,
+			item.PriceSell,
 			trendStyle.Render(directionSign),
 		)
 
