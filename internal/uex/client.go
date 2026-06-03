@@ -13,20 +13,22 @@ type Listing struct {
 	IDTerminal      int     `json:"id_terminal"`
 	PriceBuy        float32 `json:"price_buy"`
 	PriceBuyAvg     float32 `json:"price_buy_avg"`
+	PriceSell       float32 `json:"price_sell"`
+	PriceSellAvg    float32 `json:"price_sell_avg"`
 	SCUBuy          int     `json:"scu_buy"`
 	SCUBuyAvg       int     `json:"scu_buy_avg"`
 	SCUSellStock    int     `json:"scu_sell_stock"`
 	SCUSellStockAvg int     `json:"scu_sell_stock_avg"`
 	SCUSell         int     `json:"scu_sell"`
 	SCUSellAvg      int     `json:"scu_sell_avg"`
-	StatusBuy       int     `json:"status_buy"`
-	StatusSell      int     `json:"status_sell"`
-	ContainerSizes  string  `json:"container_sizes"`
-	Quality         int     `json:"quality"`
-	DateAdded       int64   `json:"date_added"`
-	DateModified    int64   `json:"date_modified"`
-	CommodityName   string  `json:"commodity_name"`
-	TerminalName    string  `json:"terminal_name"`
+	StatusBuy       int     `json:"status_buy,omitempty"`
+	StatusSell      int     `json:"status_sell,omitempty"`
+	ContainerSizes  string  `json:"container_sizes,omitempty"`
+	Quality         int     `json:"quality,omitempty"`
+	DateAdded       int64   `json:"date_added,omitempty"`
+	DateModified    int64   `json:"date_modified,omitempty"`
+	CommodityName   string  `json:"commodity_name,omitempty"`
+	TerminalName    string  `json:"terminal_name,omitempty"`
 }
 
 type Commodity struct {
@@ -76,13 +78,13 @@ var (
 )
 
 func ClientConfig(url string, token string) APIClient {
-	return APIClient{BaseURL: url, Token: "Bearer " + token}
+	return APIClient{BaseURL: url, Token: "Bearer " + token, client: &http.Client{}}
 
 }
 
 func (a *APIClient) CommmodityPricesAll() (APIResponse, error) {
 
-	req, err := http.NewRequest("GET", a.BaseURL+"/commodities", nil)
+	req, err := http.NewRequest("GET", a.BaseURL+"/commodities_prices_all", nil)
 	if err != nil {
 		return APIResponse{}, fmt.Errorf("GET error = %w", err)
 	}
