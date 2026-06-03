@@ -51,12 +51,15 @@ type styles struct {
 }
 
 type model struct {
-	state     SessionState
-	list      list.Model
-	choice    string
-	styles    styles
-	quitting  bool
-	textInput textinput.Model
+	state       SessionState
+	list        list.Model
+	choice      string
+	styles      styles
+	quitting    bool
+	textInput   textinput.Model
+	marketData  []uex.Listing
+	activeFocus int
+	termWidth   int
 }
 
 type Commodity struct {
@@ -276,6 +279,25 @@ func (m model) updateCargoSize(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 }
 
+func (m model) updateTradeGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch keypress := msg.String(); keypress {
+		case "left":
+			if m.activeFocus > 0 {
+				m.activeFocus--
+			}
+		case "right":
+			if m.activeFocus > (len(m.marketData) - 1) {
+				m.activeFocus++
+			}
+		}
+	}
+
+	var cmd tea.Cmd
+	return m, cmd
+}
+
 func (m model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -293,16 +315,26 @@ func (m model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			i, ok := m.list.SelectedItem().(item)
 			m.choice = string(i)
 			log.Println("User made choice: ", m.choice)
+
+			// Settings State inititalization
 			if ok && m.choice == SettingsStr {
 				m.state = SettingsState
 				m = settingsList(m)
 				return m, nil
 
 			}
+
+			// Trade State initialization
+			if ok && m.choice == TradeStr {
+				m = TradeView(m)
+				return m, nil
+			}
+			// Exit
 			if ok && m.choice == ExitStr {
 				m.quitting = true
 				return m, tea.Quit
 			}
+
 		}
 	}
 
@@ -314,9 +346,11 @@ func (m model) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	//case tea.WindowSizeMsg:
-	//	m.list.SetWidth(msg.Width)
-	//	return m, nil
+	case tea.WindowSizeMsg:
+		m.termWidth = msg.Width
+		m.list.SetWidth(m.termWidth)
+		return m, nil
+
 	case tea.KeyPressMsg:
 		switch keypress := msg.String(); keypress {
 		case "ctrl+c", "q", "esc":
@@ -335,6 +369,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateSettings(msg)
 	case SetCargoSizeState:
 		return m.updateCargoSize(msg)
+	case TradeState:
+		return m.updateTradeGrid(msg)
 	case MainState:
 		return m.updateMainMenu(msg)
 	default:
@@ -401,13 +437,15 @@ func setCargoSizeView(m model) model {
 
 func TradeView(m model) model {
 	log.Println("Commodities")
-	resp, err := uex.GetCommmoddityPrices()
-	m.state = TradeState
+	resp, err := UEXClient.CommmodityPricesAll()
 	if err != nil {
-		log.Println("Can't connect to UEX")
+		log.Println("Fetching Commodities failed, can't connect to UEX")
 		return m
 	}
 	log.Println("Commodities: ", resp)
+	m.state = TradeState
+	m.marketData = resp.Data
+	m.activeFocus = 0
 	return m
 }
 
@@ -466,26 +504,21 @@ func (m model) View() tea.View {
 		return v
 	}
 	if m.state == TradeState {
-		var c *tea.Cursor
-		if !m.textInput.VirtualCursor() {
-			c := m.textInput.Cursor()
-			c.Y += lipgloss.Height(m.headerView())
-
-		}
-		str := lipgloss.JoinVertical(lipgloss.Top, m.cargoSizeHeader(), m.textInput.View(), m.footerView())
+		gridLayout := RenderBloombergGrid(m.marketData, m.activeFocus, m.termWidth)
+		str := lipgloss.JoinVertical(lipgloss.Top, m.TradeHeader(), gridLayout, m.footerView())
 		v := tea.NewView(str)
-		v.Cursor = c
 		return v
 	}
 
 	return tea.NewView("\n" + m.list.View())
-	//return tea.NewView(mainStyle.Render("\n" + s + "\n"))
-	//return tea.NewView(m.settings.View())
 }
 
 func (m model) headerView() string { return fmt.Sprintf("\nCurrent API key: %s\n", api) }
 func (m model) cargoSizeHeader() string {
 	return fmt.Sprintf("\nCurrent Total SCU set to: %d", cargoSize)
+}
+func (m model) TradeHeader() string {
+	return fmt.Sprintf("\nCommodities")
 }
 func (m model) footerView() string { return "\n(q to quit)" }
 
