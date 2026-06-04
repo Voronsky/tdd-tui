@@ -31,40 +31,90 @@ type Listing struct {
 	TerminalName    string  `json:"terminal_name,omitempty"`
 }
 
+//type Commodity struct {
+//	IDCommodity           int    `json:"id_commodity"`
+//	IDStarSystem          int    `json:"id_star_system"`
+//	IDPlanet              int    `json:"id_planet"`
+//	IDOrbit               int    `json:"id_orbit"`
+//	IDMoon                int    `json:"id_moon"`
+//	IDCity                int    `json:"id_city"`
+//	IDOutpost             int    `json:"id_outpost"`
+//	IDPoi                 int    `json:"id_poi"`
+//	IDFaction             int    `json:"id_faction"`
+//	IDTerminal            int    `json:"id_terminal"`
+//	GameVersion           string `json:"game_version"`
+//	DateAdded             int    `json:"date_added"`
+//	DateModified          int    `json:"date_modified"`
+//	CommodityName         string `json:"commodity_name"`
+//	CommodityCode         string `json:"commodity_code"`
+//	CommoditySlug         string `json:"commodity_slug"`
+//	StarSystemName        string `json:"star_system_name"`
+//	PlanetName            string `json:"planet_name"`
+//	OrbitName             string `json:"orbit_name"`
+//	MoonName              string `json:"moon_name"`
+//	SpaceStationName      string `json:"space_station_name"`
+//	OutpostName           string `json:"outpost_name"`
+//	CityName              string `json:"city_name"`
+//	TerminalName          string `json:"terminal_name"`
+//	TerminalCode          string `json:"terminal_code"`
+//	TerminalSlug          string `json:"terminal_slug"`
+//	TerminalIsPlayerOwned int    `json:"terminal_is_player_owned"`
+//}
+
 type Commodity struct {
-	IDCommodity           int    `json:"id_commodity"`
-	IDStarSystem          int    `json:"id_star_system"`
-	IDPlanet              int    `json:"id_planet"`
-	IDOrbit               int    `json:"id_orbit"`
-	IDMoon                int    `json:"id_moon"`
-	IDCity                int    `json:"id_city"`
-	IDOutpost             int    `json:"id_outpost"`
-	IDPoi                 int    `json:"id_poi"`
-	IDFaction             int    `json:"id_faction"`
-	IDTerminal            int    `json:"id_terminal"`
-	GameVersion           string `json:"game_version"`
-	DateAdded             int    `json:"date_added"`
-	DateModified          int    `json:"date_modified"`
-	CommodityName         string `json:"commodity_name"`
-	CommodityCode         string `json:"commodity_code"`
-	CommoditySlug         string `json:"commodity_slug"`
-	StarSystemName        string `json:"star_system_name"`
-	PlanetName            string `json:"planet_name"`
-	OrbitName             string `json:"orbit_name"`
-	MoonName              string `json:"moon_name"`
-	SpaceStationName      string `json:"space_station_name"`
-	OutpostName           string `json:"outpost_name"`
-	CityName              string `json:"city_name"`
-	TerminalName          string `json:"terminal_name"`
-	TerminalCode          string `json:"terminal_code"`
-	TerminalSlug          string `json:"terminal_slug"`
-	TerminalIsPlayerOwned int    `json:"terminal_is_player_owned"`
+	ID        int     `json:"id"`
+	IDParent  int     `json:"id_parent,omitempty"`
+	IDItem    int     `json:"id_item,omitempty"`
+	Name      string  `json:"name"`
+	Code      string  `json:"code"`                 // UEX code
+	Slug      string  `json:"slug"`                 // UEX slug
+	WeightSCU float32 `json:"weight_scu,omitempty"` // tons
+	PriceBuy  float32 `json:"price_buy"`
+	PriceSell float32 `json:"price_sell"`
+}
+
+type CommodityAverages struct {
+	ID          int `json:"id"`
+	IDCommodity int `json:"id_commodity"`
+
+	// buy
+	PriceBuy          float32 `json:"price_buy"` // last
+	PriceBuyMin       float32 `json:"price_buy_min"`
+	PriceBuyMinWeek   float32 `json:"price_buy_min_week"`
+	PriceBuyMinMonth  float32 `json:"price_buy_min_month"`
+	PriceBuyMax       float32 `json:"price_buy_max"`
+	PriceBuyMaxWeek   float32 `json:"price_buy_max_week"`
+	PriceBuyMaxMonth  float32 `json:"price_buy_max_month"`
+	PriceBuyAvg       float32 `json:"price_buy_avg"`
+	PriceBuyAvgWeek   float32 `json:"price_buy_avg_week"`
+	PricebuyAvgMonth  float32 `json:"price_buy_avg_month"`
+	PriceBuyUsers     float32 `json:"price_buy_users"`      // last 15d, average from user trades
+	PriceBuyUsersRows int     `json:"price_buy_users_rows"` // trips in the last 15d, coming from user trades
+
+	// sell
+	PriceSell          float32 `json:"price_sell"` // last
+	PriceSellMin       float32 `json:"price_sell_min"`
+	PriceSellMinWeek   float32 `json:"price_sell_min_week"`
+	PriceSellMinMonth  float32 `json:"price_sell_min_month"`
+	PriceSellMax       float32 `json:"price_sell_max"`
+	PriceSellMaxWeek   float32 `json:"price_sell_max_week"`
+	PriceSellMaxMonth  float32 `json:"price_sell_max_month"`
+	PriceSellAvg       float32 `json:"price_sell_avg"`
+	PriceSellAvgWeek   float32 `json:"price_sell_avg_week"`
+	PriceSellUsers     float32 `json:"price_sell_users"`      // last 15d, average from user trades
+	PriceSellUsersRows int     `json:"price_sell_users_rows"` // trips in the last 15d, coming from user trades
 }
 
 type APIResponse struct {
-	Status   string    `json:"status"`
-	HttpCode int       `json:"http_code"`
-	Data     []Listing `json:"data"`
+	Status   string      `json:"status"`
+	HttpCode int         `json:"http_code"`
+	Data     []Commodity `json:"data"`
+}
+
+type CommodityAvgResponse struct {
+	Status   string            `json:"status"`
+	HttpCode int               `json:"http_code"`
+	Data     CommodityAverages `json:"data"`
 }
 
 type APIClient struct {
@@ -79,6 +129,34 @@ var (
 
 func ClientConfig(url string, token string) APIClient {
 	return APIClient{BaseURL: url, Token: "Bearer " + token, client: &http.Client{}}
+
+}
+
+// https://uexcorp.space/api/documentation/id/get_commodities/
+func (a *APIClient) Commodities() (APIResponse, error) {
+	req, err := http.NewRequest("GET", a.BaseURL+"/commodities", nil)
+	if err != nil {
+		return APIResponse{}, fmt.Errorf("GET error = %w", err)
+	}
+
+	req.Header.Set("Authorization", a.Token)
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Add("Accept", "application/json")
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var uexResponse APIResponse
+	err = json.Unmarshal(body, &uexResponse)
+	if err != nil {
+		return APIResponse{}, fmt.Errorf("Client error = %w", err)
+	}
+
+	return uexResponse, nil
 
 }
 
@@ -138,6 +216,46 @@ func (a *APIClient) CommmodityPrices(commodity_id int) (APIResponse, error) {
 
 }
 
+// TODO: Rethink the purpose of this
+//
+//	func (a *APIClient) CommoditiesAveragesAll() ([]CommodityAverages, error) {
+//		var commodityAvgs []CommodityAverages
+//
+//		// Get all the commodities
+//		cl, err := a.CommmodityPricesAll()
+//		if err != nil {
+//			return []CommodityAverages{}, fmt.Errorf("Client error = %w", err)
+//		}
+//		commodities := cl.Data
+//
+//		// For each commodity, get their average over the past 15 days
+//		for _, v := range commodities {
+//			req, err := http.NewRequest("GET", fmt.Sprintf(a.BaseURL+"/commodities_averages?id_commodity=%d", v.ID), nil)
+//			if err != nil {
+//				return []CommodityAverages{}, fmt.Errorf("Client error = %w", err)
+//			}
+//			req.Header.Set("Authorization", a.Token)
+//			req.Header.Set("User-Agent", UserAgent)
+//			req.Header.Add("Accept", "application/json")
+//			resp, err := a.client.Do(req)
+//			if err != nil {
+//				return []CommodityAverages{}, fmt.Errorf("Client error = %w", err)
+//			}
+//			defer resp.Body.Close()
+//			body, _ := io.ReadAll(resp.Body)
+//			var ca_resp CommodityAverages
+//			err = json.Unmarshal(body, &ca_resp)
+//			if err != nil {
+//				return []CommodityAverages{}, fmt.Errorf("Client error = %w", err)
+//			}
+//
+//			//Append it to the list of commodity averages
+//			commodityAvgs = append(commodityAvgs, ca_resp)
+//		}
+//
+//		return commodityAvgs, nil
+//
+// }
 func (a *APIClient) CommmodityRoutes(src int, dest int) (APIResponse, error) {
 
 	req, err := http.NewRequest("GET", fmt.Sprintf(a.BaseURL+"/commodities_route?id_terminal_origin=%d&id_terminal_destination=%d", src, dest), nil)
