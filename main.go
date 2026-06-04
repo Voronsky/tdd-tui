@@ -51,24 +51,16 @@ type styles struct {
 }
 
 type model struct {
-	state       SessionState
-	list        list.Model
-	choice      string
-	styles      styles
-	quitting    bool
-	textInput   textinput.Model
-	marketData  []uex.Listing
-	activeFocus int
-	termWidth   int
-}
-
-type Commodity struct {
-	Name string
-	Code string
-	Kind string
-	Buy  float64
-	Sell float64
-	SCU  float64
+	state        SessionState
+	list         list.Model
+	choice       string
+	styles       styles
+	quitting     bool
+	textInput    textinput.Model
+	marketData   []uex.Commodity
+	termWidth    int
+	cursorIdx    int
+	windowOffset int
 }
 
 type item string
@@ -98,12 +90,6 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	}
 
 	fmt.Fprint(w, fn(str))
-}
-
-func getCommodities() ([]Commodity, error) {
-	commodities := []Commodity{}
-	//Rest CALL
-	return commodities, nil
 }
 
 func newStyles(darkBG bool) styles {
@@ -280,17 +266,46 @@ func (m model) updateCargoSize(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateTradeGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
+	const columns = 6
+	const maxVisibleRows = 3
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch keypress := msg.String(); keypress {
-		case "left":
-			if m.activeFocus > 0 {
-				m.activeFocus--
+		case "up":
+			//Safely retreat the cursor without dropping below zero
+			if m.cursorIdx >= columns {
+				m.cursorIdx -= columns
+			} else {
+				m.cursorIdx = 0
 			}
-		case "right":
-			if m.activeFocus > (len(m.marketData) - 1) {
-				m.activeFocus++
+
+			// If the cursor pushes above the visible cieling, pull the viewport upwards
+			targetRow := m.cursorIdx / columns
+			if targetRow < m.windowOffset {
+				m.windowOffset = targetRow
 			}
+
+		case "down":
+			if m.cursorIdx+columns < len(m.marketData) {
+				m.cursorIdx += columns
+			} else {
+				m.cursorIdx = len(m.marketData) - 1
+			}
+
+			// If the cursor falls below the visible floor, pull the viewport downwards
+			targetRow := m.cursorIdx / columns
+			if targetRow >= m.windowOffset+maxVisibleRows {
+				m.windowOffset = targetRow - maxVisibleRows + 1
+			}
+		case "esc", "q":
+			m.textInput.Reset()
+			m.state = MainState
+			m = mainList(m)
+			return m, nil
+		case "ctrl+c":
+			m.textInput.Reset()
+			m.quitting = true
+			return m, tea.Quit
 		}
 	}
 
@@ -437,7 +452,7 @@ func setCargoSizeView(m model) model {
 
 func TradeView(m model) model {
 	log.Println("Commodities")
-	resp, err := UEXClient.CommmodityPricesAll()
+	resp, err := UEXClient.Commodities()
 	if err != nil {
 		log.Println("Fetching Commodities failed, can't connect to UEX")
 		return m
@@ -445,7 +460,8 @@ func TradeView(m model) model {
 	log.Println("Commodities: ", resp)
 	m.state = TradeState
 	m.marketData = resp.Data
-	m.activeFocus = 0
+	m.cursorIdx = 0
+	m.windowOffset = 0
 	return m
 }
 
@@ -463,7 +479,9 @@ func mainList(m model) model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 
-	m = model{state: MainState, list: l, choice: "Back to Main Menu"}
+	m.state = MainState
+	m.list = l
+	m.choice = "Back to Main Menu"
 	m.updateStyles(true)
 	log.Println("Exiting the MainList() func")
 	return m
@@ -504,9 +522,10 @@ func (m model) View() tea.View {
 		return v
 	}
 	if m.state == TradeState {
-		gridLayout := RenderBloombergGrid(m.marketData, m.activeFocus, m.termWidth)
+		gridLayout := RenderBloombergGrid(m.marketData, m.cursorIdx, m.windowOffset)
 		str := lipgloss.JoinVertical(lipgloss.Top, m.TradeHeader(), gridLayout, m.footerView())
 		v := tea.NewView(str)
+		v.AltScreen = true
 		return v
 	}
 
@@ -518,9 +537,11 @@ func (m model) cargoSizeHeader() string {
 	return fmt.Sprintf("\nCurrent Total SCU set to: %d", cargoSize)
 }
 func (m model) TradeHeader() string {
-	return fmt.Sprintf("\nCommodities")
+	return fmt.Sprintf("\t\tCommodities\t\t\n")
 }
-func (m model) footerView() string { return "\n(q to quit)" }
+func (m model) footerView() string {
+	return "up arrow, to go up\ndown arrow to go down\n(q or ctrl+c to quit)"
+}
 
 func main() {
 	f, err := tea.LogToFile("debug.log", "debug")
