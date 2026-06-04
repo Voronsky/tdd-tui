@@ -8,79 +8,94 @@ import (
 )
 
 // RenderBloombergGrid computes the side-by-side cell layout matrices.
-func RenderBloombergGrid(items []uex.Listing, focusedIndex int, terminalWidth int) string {
+func RenderBloombergGrid(items []uex.Commodity, focusedIndex int, windowOffset int) string {
+	// Basic layout
+	const cols = 6
+	const visibleRows = 3
+
 	const fixedBoxWidth = 22
 
-	if len(items) == 0 {
-		return "Awaiting Market Data from UEX...."
+	currentRow := focusedIndex / cols
+
+	// Now calculate the vertical sliding window to keep the cursor in view
+	// Ensuring that , as the trading window scrolls down when moving past the visible floor
+	startRow := 0
+
+	if currentRow >= visibleRows {
+		startRow = currentRow - visibleRows + 1
 	}
 
-	// 1. Calculate how many boxes can physically fit on screen safely
-	maxVisible := terminalWidth / fixedBoxWidth
-	if maxVisible < 1 {
-		maxVisible = 1 // Ensure at least one box renders even on tiny screens
-	}
+	var renderedRows []string
 
-	// 2. Compute the start and end boundaries of the sliding window
-	startIdx := 0
-	if focusedIndex >= maxVisible {
-		// Shift the window to keep the cursor at the right-most edge
-		startIdx = focusedIndex - maxVisible + 1
-	}
+	// 3. Loop through the data to construct only the visible rows
+	for r := startRow; r < startRow+visibleRows; r++ {
+		var currentColumnBlocks []string
 
-	endIdx := startIdx + maxVisible
-	if endIdx > len(items) {
-		endIdx = len(items)
-	}
+		for c := 0; c < cols; c++ {
+			// Translate matrix coordinates back into a flat slice index
+			flatIndex := (r * cols) + c
 
-	// 3. Slice the payload to extract only the visible nodes
-	visibleSlice := items[startIdx:endIdx]
+			// Prevent out-of-bounds panics on the final incomplete row
+			if flatIndex >= len(items) {
+				break
+			}
 
-	var computedCells []string
+			node := items[flatIndex]
 
-	for i, item := range visibleSlice {
-		actualIndex := startIdx + i
-		// Define strict dimension boundaries for each grid element cell
-		cellStyle := lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			Padding(1, 2).
-			Width(fixedBoxWidth - 2).
-			Height(5)
+			// Construct the individual cell bounding boxes
+			cellStyle := lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(lipgloss.Color("68")).
+				Width(18).
+				Height(4)
 
-		// Apply highlight matrix formatting if the item matches the active index
-		if actualIndex == focusedIndex {
-			cellStyle = cellStyle.BorderForeground(lipgloss.Color("86")) // Accent cyan
+			if flatIndex == focusedIndex {
+				cellStyle = cellStyle.BorderForeground(lipgloss.Color("86"))
+			}
+
+			//TODO: Rethink how to do trends without blowing up Requests
+			//isTrendingUp := node.PriceBuy > node.PriceBuyAvg
+
+			//// Default to downward trend
+			//indicatorColor := "160" //System Red
+			//directionSign := "▼"
+
+			//if isTrendingUp {
+			//	indicatorColor = "46" // System Green
+			//	directionSign = "▲"   // Price is going up
+			//}
+
+			//trendStyle := lipgloss.NewStyle().Foreground((lipgloss.Color(indicatorColor)))
+
+			//Stylize the name of each commodity
+			styledName := lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FFD700")).
+				Render(node.Name)
+
+			styledBuy := lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("46")).
+				Render(fmt.Sprintf("%.2f", node.PriceBuy))
+
+			styledSell := lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("46")).
+				Render(fmt.Sprintf("%.2f", node.PriceSell))
+
+			content := fmt.Sprintf(
+				"Name:%s\n\nB: %s\nS: %s\n", styledName, styledBuy, styledSell)
+			currentColumnBlocks = append(currentColumnBlocks, cellStyle.Render(content))
 		}
 
-		// Dynamically assign terminal color weights based on trend boolean evaluations
-		// Let's calculate Upward or Downward terend first
-		isTrendingUp := item.PriceBuy > item.PriceBuyAvg
-
-		// Default to downward trend
-		indicatorColor := "160" // System Red
-		directionSign := "▼"
-
-		// Check if line go up
-		if isTrendingUp {
-			indicatorColor = "46" // System Green
-			directionSign = "▲"   // Price is going up
+		if len(currentColumnBlocks) > 0 {
+			// Stitch the columns together horizontally to form a completed row
+			rowString := lipgloss.JoinHorizontal(lipgloss.Top, currentColumnBlocks...)
+			renderedRows = append(renderedRows, rowString)
 		}
-
-		trendStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(indicatorColor))
-
-		// Compose individual cell string metrics vertically
-		cellContent := fmt.Sprintf(
-			"%s\n\nB: %.2f\nS: %.2f\n%s",
-			lipgloss.NewStyle().Bold(true).Render(item.CommodityName),
-			item.PriceBuy,
-			item.PriceSell,
-			trendStyle.Render(directionSign),
-		)
-
-		// Render strings inside boundaries and append to layout sequence slice
-		computedCells = append(computedCells, cellStyle.Render(cellContent))
 	}
 
-	// Stitch distinct cell columns into a single row matrix block side-by-side
-	return lipgloss.JoinHorizontal(lipgloss.Top, computedCells...)
+	// 4. Stitch the completed rows together vertically to form the grid matrix
+	return lipgloss.JoinVertical(lipgloss.Left, renderedRows...)
+
 }
