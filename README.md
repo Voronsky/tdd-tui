@@ -8,7 +8,7 @@ Trade &amp; Development Division - TUI . A fun little project I made to learn ho
 
 
 ## Development
-whenever you need to quickly see changes, just run
+Not being actively maintained. Got frustrated with learning the ELM design with bubblegum, but  whenever you need to quickly see changes, just run
 
 ```shell
 go run .
