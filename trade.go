@@ -8,22 +8,21 @@ import (
 )
 
 // RenderBloombergGrid computes the side-by-side cell layout matrices.
-func RenderBloombergGrid(items []uex.Commodity, focusedIndex int, windowOffset int) string {
-	// Basic layout
-	const cols = 6
+func RenderBloombergGrid(items []uex.Commodity, focusedIndex int, windowOffset int, terminalWidth int) string {
+	// Basic layout , matches main.go
+	const boxTotalWidth = 24
 	const visibleRows = 3
 
 	const fixedBoxWidth = 22
 
-	currentRow := focusedIndex / cols
-
-	// Now calculate the vertical sliding window to keep the cursor in view
-	// Ensuring that , as the trading window scrolls down when moving past the visible floor
-	startRow := 0
-
-	if currentRow >= visibleRows {
-		startRow = currentRow - visibleRows + 1
+	//Calculate columns dynamically to prevent the screen from glitching out
+	cols := terminalWidth / boxTotalWidth
+	if cols < 1 {
+		cols = 1
 	}
+
+	// Force the loop to strictly obey the 'main' initial state
+	startRow := windowOffset
 
 	var renderedRows []string
 

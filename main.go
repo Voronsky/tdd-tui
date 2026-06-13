@@ -266,8 +266,15 @@ func (m model) updateCargoSize(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateTradeGrid(msg tea.Msg) (tea.Model, tea.Cmd) {
-	const columns = 6
+	const boxTotalWidth = 24 // 18 for content, 4 for padding and 2 for borders
 	const maxVisibleRows = 3
+
+	// Now we need to calculate how many of the commodity boxes to fit on the screen
+	columns := m.termWidth / boxTotalWidth
+	if columns < 1 {
+		columns = 1
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch keypress := msg.String(); keypress {
@@ -522,7 +529,7 @@ func (m model) View() tea.View {
 		return v
 	}
 	if m.state == TradeState {
-		gridLayout := RenderBloombergGrid(m.marketData, m.cursorIdx, m.windowOffset)
+		gridLayout := RenderBloombergGrid(m.marketData, m.cursorIdx, m.windowOffset, m.termWidth)
 		str := lipgloss.JoinVertical(lipgloss.Top, m.TradeHeader(), gridLayout, m.footerView())
 		v := tea.NewView(str)
 		v.AltScreen = true
